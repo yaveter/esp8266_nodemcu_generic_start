@@ -19,7 +19,7 @@
 --
 -- Author: iGrowing
 -- License: MIT
---
+-- Update: Yaveter - More stable operation
 
 local moduleName = ...
 local M = {}
@@ -48,11 +48,13 @@ function M.init(timer_id, sample_interval, trig_pin, echo_pin)
         -- Register in variables the echo start/stop timestamps
         if level == gpio.HIGH then 
             _start = tmr.now() 
+            gpio.trig(ECHO_PIN, "down")
         else 
             _end = tmr.now() 
+             gpio.trig(ECHO_PIN,"none") --reducing the influence of bounce
         end
     end
-    gpio.trig(ECHO_PIN, "both", _trig_cb)
+
 end
 
 local function _trig()  -- Internal function
@@ -60,6 +62,7 @@ local function _trig()  -- Internal function
     gpio.write(TRIG_PIN, gpio.HIGH)
     tmr.delay(10)
     gpio.write(TRIG_PIN, gpio.LOW)
+    gpio.trig(ECHO_PIN, "up", _trig_cb)
 end
 
 local function _calc()  -- Internal function
@@ -75,10 +78,15 @@ end
 function M.poll_distance()
 ---  Read and print distance periodically by SAMPLE_INTERVAL.  ---
 -- TODO: Rewrite the print with callback: True value comes with SAMPLE_INTERVAL delay.
-    tmr.alarm(TID, SAMPLE_INTERVAL, 1, function()
-        _trig()
-        local d = _calc()
-        if d > 1 then print(d) else print("Timeout.") end
+    tmr.alarm(TID, SAMPLE_INTERVAL/2, 1, function()         
+        if  iterator==0 then  --skip one cycle to interrupt occurred before the timer reading
+           _trig() 
+           iterator=iterator+1
+        else   
+           local d = _calc()            
+            if d > 1 then print(d) else print("Timeout.") end 
+            iterator=0     
+        end 
     end)
 end
 
